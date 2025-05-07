@@ -1,11 +1,12 @@
-public class MinFinderThread implements Runnable {
+class MinFinderThread implements Runnable {
     private int[] array;
     private int start, end;
+    private int localMin = Integer.MAX_VALUE;
+    private int localIndex = -1;
     private static int globalMin = Integer.MAX_VALUE;
     private static int globalIndex = -1;
+    private static final Object globalMonitor = new Object();
     private static int completedThreads = 0;
-    private static int totalThreads = 0;
-    private static final Object locker = new Object();
 
     public MinFinderThread(int[] array, int start, int end) {
         this.array = array;
@@ -15,9 +16,6 @@ public class MinFinderThread implements Runnable {
 
     @Override
     public void run() {
-        int localMin = Integer.MAX_VALUE;
-        int localIndex = -1;
-
         for (int i = start; i < end; i++) {
             if (array[i] < localMin) {
                 localMin = array[i];
@@ -25,34 +23,43 @@ public class MinFinderThread implements Runnable {
             }
         }
 
-        synchronized (locker) {
+        synchronized (globalMonitor) {
             if (localMin < globalMin) {
                 globalMin = localMin;
                 globalIndex = localIndex;
             }
             completedThreads++;
+            globalMonitor.notifyAll();
         }
     }
 
-    public static int getGlobalMin() {
-        return globalMin;
-    }
+    public static void startThreadsAndWait(int[] array, int numThreads) {
+        int arraySize = array.length;
+        int chunkSize = arraySize / numThreads;
+        Thread[] threads = new Thread[numThreads];
 
-    public static int getGlobalIndex() {
-        return globalIndex;
-    }
+        globalMin = Integer.MAX_VALUE;
+        globalIndex = -1;
+        completedThreads = 0;
 
-    public static int getCompletedThreads() {
-        return completedThreads;
-    }
+        for (int i = 0; i < numThreads; i++) {
+            int start = i * chunkSize;
+            int end = (i == numThreads - 1) ? arraySize : start + chunkSize;
+            threads[i] = new Thread(new MinFinderThread(array, start, end));
+            threads[i].start();
+        }
 
-    public static void setTotalThreads(int totalThreads) {
-        MinFinderThread.totalThreads = totalThreads;
-    }
+        synchronized (globalMonitor) {
+            while (completedThreads < numThreads) {
+                try {
+                    globalMonitor.wait();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
 
-    public static boolean allThreadsCompleted() {
-        synchronized (locker) {
-            return completedThreads == totalThreads;
+            System.out.println("Global Min: " + globalMin + ", Index: " + globalIndex);
         }
     }
 }
