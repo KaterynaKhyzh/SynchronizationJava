@@ -1,6 +1,6 @@
 import java.util.Random;
 
-class ArrayUtils {
+public class ArrayUtils {
     public static int[] generateArray(int size) {
         Random rand = new Random();
         int[] array = new int[size];
